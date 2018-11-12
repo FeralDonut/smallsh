@@ -27,7 +27,7 @@ int run_bg = YES;
  NAME
     statusCommand
 DESCRIPTION
-    
+    takes in integer and will determine if the it was an exit value or a termination signal and print it to the screen
 REFERENCE:
  	WFEXITSTATUS() & WTERMSIG() Lecture 3.1
 */
@@ -45,11 +45,12 @@ void statusCommand(int childExitMethod)
 
 /*
  NAME
-    
+ 	signalStop    
 DESCRIPTION
-    
+    Checks to see if background processing is allowed or no and will start
+    or finish foreground-only and write to stdout
 RESOURCE
-       
+       Lecture 3.3 Signals
 */
 void signalStop(int signo) 
 {
@@ -72,9 +73,12 @@ void signalStop(int signo)
 
 /*
  NAME
-    
+    shellCOmmand
 DESCRIPTION
-    
+    takes in the command given to the program 
+    forks
+    child processes will open a file to read from and open a file to write to and then close file
+    parent will wait for child process to finish and report out
 RESOURCE
        fork() lecture 3.1
        dup2() and fcntl() from lecture 3.4
@@ -162,17 +166,19 @@ void shellCommand(char *arr[], int *childExitStatus, struct sigaction sa, int *f
 
 /*
  NAME
-    
+    commandLine
 DESCRIPTION
-    
+    takes in the command passed to the program
+    will see if redirection is needed, if background process will run, or if a name with PID is needed
 RESOURCE
-       
+    https://www.geeksforgeeks.org/snprintf-c-library/
+    https://stackoverflow.com/questions/2693776/removing-trailing-newline-character-from-fgets-input
 */
-void commandLine(char* arr[], int* fgbg_status, char inputName[], char outputName[], int pid) 
+void commandLine(char* arr[], int* fgbg_status, char read_file[], char write_file[], int pid) 
 {
 	
-	char input[MAXLENGTH];;
-	char *destination_buffer[MAXARG];
+	char input[MAXLENGTH];
+	char *source_buffer;
 	int i, j;
 	const char space[2] = " ";
 
@@ -192,12 +198,12 @@ void commandLine(char* arr[], int* fgbg_status, char inputName[], char outputNam
 		{
 			//< denotes input
 			curr_arg = strtok(NULL, space);
-			strcpy(inputName, curr_arg);
+			strcpy(read_file, curr_arg);
 		}else if (strcmp(curr_arg, ">") == 0) 
 		{
 			//> denotes output
 			curr_arg = strtok(NULL, space);
-			strcpy(outputName, curr_arg);
+			strcpy(write_file, curr_arg);
 		} else 	if (strcmp(curr_arg, "&") == 0) 
 		{
 			//set to background 
@@ -205,14 +211,14 @@ void commandLine(char* arr[], int* fgbg_status, char inputName[], char outputNam
 		}else 
 		{
 			arr[i] = strdup(curr_arg);
-			destination_buffer[i] = strdup(curr_arg);
+			source_buffer = strdup(curr_arg);
 		
 			for (j=0; arr[i][j]; j++) 
 			{
 				if (arr[i][j] == '$' && arr[i][j+1] == '$') 
 				{
-					destination_buffer[i][j] = '\0';
-					snprintf(arr[i], MAXLENGTH, "%s%d", destination_buffer[i], pid);
+					source_buffer[j] = '\0';
+					snprintf(arr[i], MAXLENGTH, "%s%d", source_buffer, pid);
 				}
 			}
 		}
@@ -231,8 +237,8 @@ int main()
 
 	int pid = getpid();
 	int i, fgbg_status, exitStatus = 0;
-	char input_file[256];
-	char output_file[256];
+	char input_file[MAXLENGTH];
+	char output_file[MAXLENGTH];
 	char *command_line[MAXARG];
 	struct sigaction sa_sigint = {0};
 	struct sigaction sa_sigtstp = {0};
