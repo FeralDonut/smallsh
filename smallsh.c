@@ -10,8 +10,10 @@
 #define MAXARG 512
 #define BACKGROUND 1
 #define FOREGROUND 0
+#define YES	1
+#define NO 0
 
-int allow_background = 1;
+int run_bg = YES;
 
 /*
  NAME
@@ -44,19 +46,18 @@ RESOURCE
 void signalStop(int signo) 
 {
 
-	// If it's 1, set it to 0 and display a message reentrantly
-	if (allow_background == 1) 
+	if (run_bg == YES) 
 	{
 		char* message = "Entering foreground-only mode (& is now ignored)\n";
 		write(1, message, 49);
 		fflush(stdout);
-		allow_background = 0;
+		run_bg = NO;
 	}else 
 	{
 		char* message = "Exiting foreground-only mode\n";
 		write (1, message, 29);
 		fflush(stdout);
-		allow_background = 1;
+		run_bg = YES;
 	}
 }
 
@@ -70,7 +71,7 @@ RESOURCE
        fork() lecture 3.1
        dup2() and fcntl() from lecture 3.4
 */
-void execCmd(char *arr[], int *childExitStatus, struct sigaction sa, int *fgbg_status, char input_file[], char output_file[]) 
+void shellCommand(char *arr[], int *childExitStatus, struct sigaction sa, int *fgbg_status, char input_file[], char output_file[]) 
 {	
 	int sourceFD, targetFD, result;
 	pid_t spawnPid = -5;
@@ -120,7 +121,6 @@ void execCmd(char *arr[], int *childExitStatus, struct sigaction sa, int *fgbg_s
 				}
 				fcntl(targetFD, F_SETFD, FD_CLOEXEC);
 			}
-			
 
 			if (execvp(arr[0], (char* const*)arr)) 
 			{
@@ -130,24 +130,24 @@ void execCmd(char *arr[], int *childExitStatus, struct sigaction sa, int *fgbg_s
 			}
 			break;
 		
-		default:	
-			// Execute a process in the fgbg_status ONLY if allow_background
-			if (*fgbg_status && allow_background) {
+		default:				
+			if (*fgbg_status && run_bg) 
+			{
 				pid_t pid = waitpid(spawnPid, childExitStatus, WNOHANG);
 				printf("background pid is %d\n", spawnPid);
 				fflush(stdout);
-			}
-			// Otherwise execute it like normal
-			else {
+			} else 
+			{
 				pid_t pid = waitpid(spawnPid, childExitStatus, 0);
 			}
 
-		// Check for terminated fgbg_status processes!	
-		while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-			printf("child %d terminated\n", spawnPid);
-			statusCommand(*childExitStatus);
-			fflush(stdout);
-		}
+			// Check for terminated fgbg_status processes!	
+			while (((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) && run_bg)
+			{
+				printf("child %d terminated\n", spawnPid);
+				statusCommand(*childExitStatus);
+				fflush(stdout);
+			}
 	}
 }
 
@@ -233,13 +233,10 @@ int main()
 {
 
 	int pid = getpid();
-	int cont = 1;
-	int i;
-	int exitStatus = 0;
-	int fgbg_status;
+	int i, fgbg_status, exitStatus = 0;
 	char input_file[256];
 	char output_file[256];
-	char* command_line[MAXARG];
+	char *command_line[MAXARG];
 	struct sigaction sa_sigint = {0};
 	struct sigaction sa_sigtstp = {0};
 
@@ -267,40 +264,34 @@ int main()
 	
 		getInput(command_line, &fgbg_status, input_file, output_file, pid);
 
-		//First char is # do nothing
+		//determine the first argument from command line
 		if (*command_line[0] == '#' || *command_line[0] == '\0') 
 		{
 			;	
-		}
-		
-		// EXIT
-		else if (strcmp(command_line[0], "exit") == 0) {
-			cont = 0;
+		}else if (strcmp(command_line[0], "exit") == 0) 
+		{
 			exit(0);
-		}
-	
-		// CD
-		else if (strcmp(command_line[0], "cd") == 0) {
-			// Change to the directory specified
-			if (command_line[1]) {
-				if (chdir(command_line[1]) == -1) {
+		}else if (strcmp(command_line[0], "cd") == 0) 
+		{
+			if (command_line[1])
+			{
+				if (chdir(command_line[1]) == -1)
+				{
 					printf("Directory not found.\n");
 					fflush(stdout);
 				}
-			} else {
-			// If directory is not specified, go to ~
+			} else 
+			{
 				chdir(getenv("HOME"));
 			}
 		}
-
-		// STATUS
 		else if (strcmp(command_line[0], "status") == 0) {
 			statusCommand(exitStatus);
 		}
 
 		// Anything else
 		else {
-			execCmd(command_line, &exitStatus, sa_sigint, &fgbg_status, input_file, output_file);
+			shellCommand(command_line, &exitStatus, sa_sigint, &fgbg_status, input_file, output_file);
 		}
 
 	
@@ -330,7 +321,7 @@ int main()
  ***************************************************************/
 
 /***************************************************************
- * 			void execCmd(char*[], int*, struct sigaction, int*, char[], char[])
+ * 			void shellCommand(char*[], int*, struct sigaction, int*, char[], char[])
  *
  * Executes the command parsed into arr[]
  *
@@ -349,10 +340,10 @@ int main()
 /***************************************************************
  * 			void catchSIGTSTP(int)
  *
- * When SIGTSTP is called, toggle the allow_background boolean.
+ * When SIGTSTP is called, toggle the run_bg boolean.
  *
  * I didn't know how to pass my own variables into this, so I made
- * allow_background a global variable. I know that's bad form.
+ * run_bg a global variable. I know that's bad form.
  *
  * INPUT:
  * 	int signo		Required, according to the homework. Isn't used.
