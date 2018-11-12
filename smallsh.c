@@ -1,3 +1,11 @@
+/*
+ Name: Jose-Antonio D. Rubio
+ OSUID: 932962915
+ Class: 344-400
+ Program 3 smallsh.c
+ Comment: 
+*/
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -160,66 +168,55 @@ DESCRIPTION
 RESOURCE
        
 */
-void getInput(char* arr[], int* fgbg_status, char inputName[], char outputName[], int pid) 
+void commandLine(char* arr[], int* fgbg_status, char inputName[], char outputName[], int pid) 
 {
 	
-	char input[MAXLENGTH];
+	char input[MAXLENGTH];;
+	char *destination_buffer[MAXARG];
 	int i, j;
+	const char space[2] = " ";
 
-	// Get input
+
 	printf(": ");
 	fflush(stdout);
 	fgets(input, MAXLENGTH, stdin);
 
-	// Remove newline
-	int found = 0;
-	for (i=0; !found && i<MAXLENGTH; i++) {
-		if (input[i] == '\n') {
-			input[i] = '\0';
-			found = 1;
-		}
-	}
+	//remove the newline added by fgets
+	input[strcspn(input, "\n")] = '\0';
 
-	// If it's blank, return blank
-	if (!strcmp(input, "")) {
-		arr[0] = strdup("");
-		return;
-	}
+	char *curr_arg = strtok(input, space);
 
-	// Translate rawInput into individual strings
-	const char space[2] = " ";
-	char *token = strtok(input, space);
-
-	for (i=0; token; i++) {
-		// Check for & to be a fgbg_status process
-		if (!strcmp(token, "&")) {
+	for (i=0; curr_arg; i++) 
+	{
+		if (strcmp(curr_arg, "<") == 0) 
+		{
+			//< denotes input
+			curr_arg = strtok(NULL, space);
+			strcpy(inputName, curr_arg);
+		}else if (strcmp(curr_arg, ">") == 0) 
+		{
+			//> denotes output
+			curr_arg = strtok(NULL, space);
+			strcpy(outputName, curr_arg);
+		} else 	if (strcmp(curr_arg, "&") == 0) 
+		{
+			//set to background 
 			*fgbg_status = BACKGROUND;
-		}
-		// Check for < to denote input file
-		else if (!strcmp(token, "<")) {
-			token = strtok(NULL, space);
-			strcpy(inputName, token);
-		}
-		// Check for > to denote output file
-		else if (!strcmp(token, ">")) {
-			token = strtok(NULL, space);
-			strcpy(outputName, token);
-		}
-		// Otherwise, it's part of the command!
-		else {
-			arr[i] = strdup(token);
-			// Replace $$ with pid
-			// Only occurs at end of string in testscirpt
-			for (j=0; arr[i][j]; j++) {
-				if (arr[i][j] == '$' &&
-					 arr[i][j+1] == '$') {
-					arr[i][j] = '\0';
-					snprintf(arr[i], 256, "%s%d", arr[i], pid);
+		}else 
+		{
+			arr[i] = strdup(curr_arg);
+			destination_buffer[i] = strdup(curr_arg);
+		
+			for (j=0; arr[i][j]; j++) 
+			{
+				if (arr[i][j] == '$' && arr[i][j+1] == '$') 
+				{
+					destination_buffer[i][j] = '\0';
+					snprintf(arr[i], MAXLENGTH, "%s%d", destination_buffer[i], pid);
 				}
 			}
 		}
-		// Next!
-		token = strtok(NULL, space);
+		curr_arg = strtok(NULL, space);
 	}
 }
 
@@ -262,7 +259,7 @@ int main()
 		memset(output_file, '\0', sizeof(output_file));
 		memset(command_line, '\0', sizeof(command_line));
 	
-		getInput(command_line, &fgbg_status, input_file, output_file, pid);
+		commandLine(command_line, &fgbg_status, input_file, output_file, pid);
 
 		//determine the first argument from command line
 		if (*command_line[0] == '#' || *command_line[0] == '\0') 
@@ -284,13 +281,11 @@ int main()
 			{
 				chdir(getenv("HOME"));
 			}
-		}
-		else if (strcmp(command_line[0], "status") == 0) {
+		}else if (strcmp(command_line[0], "status") == 0) 
+		{
 			statusCommand(exitStatus);
-		}
-
-		// Anything else
-		else {
+		}else 
+		{
 			shellCommand(command_line, &exitStatus, sa_sigint, &fgbg_status, input_file, output_file);
 		}
 
@@ -303,73 +298,3 @@ int main()
 	
 	return 0;
 }
-
-/***************************************************************
- * 			void getInput(char*[], int, char*, char*, int)
- *
- * Prompts the user and parses the input into an array of words
- *
- * INPUT:
- *		char*[512] arr		The output array
- *		int* fgbg_status	Is this a fgbg_status process? boolean
- *		char* inputName	Name of an input file
- *		char* outputName	Name of an output file
- *		int pid				PID of smallsh
- *
- *	OUTPUT:
- *		void - n/a
- ***************************************************************/
-
-/***************************************************************
- * 			void shellCommand(char*[], int*, struct sigaction, int*, char[], char[])
- *
- * Executes the command parsed into arr[]
- *
- * INPUT:
- * 	char* arr[]				The array with command information
- *		int* childExitStatus	The success status of the command
- *		struct sigaction sa	The sigaction for SIGINT
- *		int* fgbg_status		Is it a fgbg_status process? boolean
- *		char inputName[]		The name of the input file
- *		char outputName[]		The name of the output file
- *
- * OUTPUT:
- *		void - n/a
-***************************************************************/
-
-/***************************************************************
- * 			void catchSIGTSTP(int)
- *
- * When SIGTSTP is called, toggle the run_bg boolean.
- *
- * I didn't know how to pass my own variables into this, so I made
- * run_bg a global variable. I know that's bad form.
- *
- * INPUT:
- * 	int signo		Required, according to the homework. Isn't used.
- *
- * OUTPUT:
- * 	void - n/a
-***************************************************************/
-
-
-/***************************************************************
- * 			void statusCommand(int)
- *
- * Calls the exit status
- *
- * INPUT:
- * 	int childExitMethod	Child Exit Method
- *
- * OUTPUT:
- * 	void - n/a
-***************************************************************/
-
-
-
-/***************************************************************
- * Filename: smallsh.c
- * Author: Brent Irwin
- * Date: 21 May 2017
- * Description: Main file for smallsh, CS 344 Program 3
-***************************************************************/
