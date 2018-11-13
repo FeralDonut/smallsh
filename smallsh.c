@@ -27,7 +27,7 @@ int run_bg = YES;
  NAME
     statusCommand
 DESCRIPTION
-    takes in integer and will determine if the it was an exit value or a termination signal and print it to the screen
+    takes in integer and will determine if the int was an exit value or a termination signal and print it to the screen
 REFERENCE:
  	WFEXITSTATUS() & WTERMSIG() Lecture 3.1
 */
@@ -83,7 +83,7 @@ RESOURCE
        fork() lecture 3.1
        dup2() and fcntl() from lecture 3.4
 */
-void shellCommand(char *arr[], int *childExitStatus, struct sigaction sa, int *fgbg_status, char input_file[], char output_file[]) 
+void shellCommand(char *command_buffer[], int *childExitStatus, struct sigaction sa, int *fgbg_status, char input_file[], char output_file[]) 
 {	
 	int sourceFD, targetFD, result;
 	pid_t spawnPid = -5;
@@ -134,9 +134,9 @@ void shellCommand(char *arr[], int *childExitStatus, struct sigaction sa, int *f
 				fcntl(targetFD, F_SETFD, FD_CLOEXEC);
 			}
 
-			if (execvp(arr[0], (char* const*)arr)) 
+			if (execvp(command_buffer[0], (char* const*)command_buffer)) 
 			{
-				printf("%s: no such file or directory\n", arr[0]);
+				printf("%s: no such file or directory\n", command_buffer[0]);
 				fflush(stdout);
 				exit(2);
 			}
@@ -174,7 +174,7 @@ RESOURCE
     https://www.geeksforgeeks.org/snprintf-c-library/
     https://stackoverflow.com/questions/2693776/removing-trailing-newline-character-from-fgets-input
 */
-void commandLine(char* arr[], int* fgbg_status, char read_file[], char write_file[], int pid) 
+void commandLine(char* destination_buffer[], int* fgbg_status, char read_file[], char write_file[], int pid) 
 {
 	
 	char input[MAXLENGTH];
@@ -196,32 +196,34 @@ void commandLine(char* arr[], int* fgbg_status, char read_file[], char write_fil
 	{
 		if (strcmp(curr_arg, "<") == 0) 
 		{
-			//< denotes input
+			//< denotes read from
 			curr_arg = strtok(NULL, space);
 			strcpy(read_file, curr_arg);
 		}else if (strcmp(curr_arg, ">") == 0) 
 		{
-			//> denotes output
+			//> denotes write to
 			curr_arg = strtok(NULL, space);
 			strcpy(write_file, curr_arg);
 		} else 	if (strcmp(curr_arg, "&") == 0) 
 		{
-			//set to background 
+			//set to background as & denotes background process
 			*fgbg_status = BACKGROUND;
 		}else 
 		{
-			arr[i] = strdup(curr_arg);
+			destination_buffer[i] = strdup(curr_arg);
 			source_buffer = strdup(curr_arg);
 		
-			for (j=0; arr[i][j]; j++) 
+			for (j=0; destination_buffer[i][j]; j++) 
 			{
-				if (arr[i][j] == '$' && arr[i][j+1] == '$') 
+				//check to see if PID is needed
+				if (destination_buffer[i][j] == '$' && destination_buffer[i][j+1] == '$') 
 				{
 					source_buffer[j] = '\0';
-					snprintf(arr[i], MAXLENGTH, "%s%d", source_buffer, pid);
+					snprintf(destination_buffer[i], MAXLENGTH, "%s%d", source_buffer, pid);
 				}
 			}
 		}
+		//pull in next argument before looping back
 		curr_arg = strtok(NULL, space);
 	}
 }
@@ -268,16 +270,21 @@ int main()
 		commandLine(command_line, &fgbg_status, input_file, output_file, pid);
 
 		//determine the first argument from command line
-		if (*command_line[0] == '#' || *command_line[0] == '\0') 
+		 if (strcmp(command_line[0], "status") == 0) 
 		{
-			;	
+			statusCommand(exitStatus);
 		}else if (strcmp(command_line[0], "exit") == 0) 
 		{
 			exit(0);
+		}else if (*command_line[0] == '#' || *command_line[0] == '\0') 
+		{
+			//# denotes a comment and this is to be ignored; do nothing
+			;	
 		}else if (strcmp(command_line[0], "cd") == 0) 
 		{
 			if (command_line[1])
 			{
+				//change directory to second argument from command_line
 				if (chdir(command_line[1]) == -1)
 				{
 					printf("Directory not found.\n");
@@ -285,20 +292,17 @@ int main()
 				}
 			} else 
 			{
+				//if no second argument then change directory to HOME
 				chdir(getenv("HOME"));
 			}
-		}else if (strcmp(command_line[0], "status") == 0) 
-		{
-			statusCommand(exitStatus);
 		}else 
 		{
+			//command was a non-built in command and will be handled by the shell
 			shellCommand(command_line, &exitStatus, sa_sigint, &fgbg_status, input_file, output_file);
 		}
 
 	
 		fgbg_status = FOREGROUND;
-		input_file[0] = '\0';
-		output_file[0] = '\0';
 
 	}
 	
